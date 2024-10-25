@@ -1,0 +1,26 @@
+---
+- hosts: all
+  become: true
+  tasks:
+    - name: Update and upgrade all packages on Debian/Ubuntu
+      apt:
+        update_cache: yes
+        upgrade: dist
+      when: ansible_os_family == "Debian"
+
+    - name: Update and upgrade all packages on RHEL/CentOS
+      yum:
+        name: "*"
+        state: latest
+      when: ansible_os_family == "RedHat"
+
+    - name: Check and reboot if needed (Debian-based)
+      command: /usr/bin/needs-restarting
+      register: reboot_required
+      failed_when: reboot_required.rc not in [0, 1]
+      changed_when: reboot_required.rc == 1
+      when: ansible_os_family == "Debian"
+
+    - name: Reboot the system if needed (Debian-based)
+      reboot:
+      when: reboot_required.rc == 1
