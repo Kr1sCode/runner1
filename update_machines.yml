@@ -24,12 +24,14 @@
       register: kernel_count
       changed_when: false
       when: os_family == "Debian"
+      become: yes  # Ensure this task runs as root
 
     - name: Check if a reboot is required for RedHat/Fedora
       command: needs-restarting
       register: reboot_required
       changed_when: false
       when: os_family == "RedHat"
+      become: yes  # Ensure this task runs as root
 
     - name: Reboot the system if required for Debian/Ubuntu
       reboot:
