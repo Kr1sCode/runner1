@@ -24,14 +24,19 @@
       register: kernel_count
       changed_when: false
       when: os_family == "Debian"
-      become: yes  # Ensure this task runs as root
+      become: yes
 
     - name: Check if a reboot is required for RedHat/Fedora
       command: needs-restarting
       register: reboot_required
       changed_when: false
       when: os_family == "RedHat"
-      become: yes  # Ensure this task runs as root
+      ignore_errors: yes  # Ignore errors if command is not found
+
+    - name: Set reboot_required variable for RedHat/Fedora
+      set_fact:
+        reboot_required_flag: "{{ reboot_required.rc == 1 }}"
+      when: os_family == "RedHat" and reboot_required is defined
 
     - name: Reboot the system if required for Debian/Ubuntu
       reboot:
@@ -39,4 +44,4 @@
 
     - name: Reboot the system if required for RedHat/Fedora
       reboot:
-      when: reboot_required.rc == 1
+      when: reboot_required_flag | default(false)  # Use default to handle if not defined
