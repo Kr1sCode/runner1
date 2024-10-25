@@ -19,19 +19,22 @@
         state: latest
       when: os_family == "RedHat"
 
-    - name: Check if reboot is required
-      register: reboot_required
-      command: needs-restarting
-      changed_when: false
-      when: os_family == "RedHat"
-
-    - name: Check if reboot is required (Debian/Ubuntu)
-      register: reboot_required_ubuntu
-      command: /usr/bin/systemctl is-system-running
+    - name: Check if a reboot is required for Debian/Ubuntu
+      command: /usr/bin/dpkg --get-selections | grep -c '^linux-image'
+      register: kernel_count
       changed_when: false
       when: os_family == "Debian"
 
-    - name: Reboot the system
-      reboot:
-      when: (reboot_required.rc == 1) or (reboot_required_ubuntu.stdout != 'running')
+    - name: Check if a reboot is required for RedHat/Fedora
+      command: needs-restarting
+      register: reboot_required
+      changed_when: false
+      when: os_family == "RedHat"
 
+    - name: Reboot the system if required for Debian/Ubuntu
+      reboot:
+      when: kernel_count.stdout|int > 0
+
+    - name: Reboot the system if required for RedHat/Fedora
+      reboot:
+      when: reboot_required.rc == 1
