@@ -1,48 +1,37 @@
 ---
-- name: Update system on remote hosts and restart services if needed
+- name: Update system and reboot if necessary
   hosts: all
   become: yes
-
   tasks:
-    - name: Gather system facts
-      setup:
+    - name: Determine OS distribution
+      set_fact:
+        os_family: "{{ ansible_os_family }}"
 
-    - name: Update the system (Debian/Ubuntu)
+    - name: Update Debian/Ubuntu systems
       apt:
         update_cache: yes
         upgrade: dist
-      when: ansible_os_family == "Debian"
+      when: os_family == "Debian"
 
-    - name: Update the system (RHEL/CentOS)
+    - name: Update RedHat/Fedora systems
       yum:
-        name: "*"
+        name: '*'
         state: latest
-      when: ansible_os_family == "RedHat"
+      when: os_family == "RedHat"
 
-    - name: Check if needs-restarting is available
-      command: which needs-restarting
-      register: needs_restarting_check
-      ignore_errors: true
-
-    - name: Check if services need restarting
+    - name: Check if reboot is required
+      register: reboot_required
       command: needs-restarting
-      when: needs_restarting_check.stdout != ""
-      register: needs_restarting_output
-      ignore_errors: true
+      changed_when: false
+      when: os_family == "RedHat"
 
-    - name: Restart services if required (for RHEL/CentOS)
-      service:
-        name: "{{ item }}"
-        state: restarted
-      loop: "{{ ansible_services }}"
-      when: needs_restarting_output is defined and needs_restarting_output.rc == 0
+    - name: Check if reboot is required (Debian/Ubuntu)
+      register: reboot_required_ubuntu
+      command: /usr/bin/systemctl is-system-running
+      changed_when: false
+      when: os_family == "Debian"
 
-    - name: Notify if services need restarting
-      debug:
-        msg: "The following services need restarting: {{ needs_restarting_output.stdout }}"
-      when: needs_restarting_output is defined and needs_restarting_output.rc == 0
+    - name: Reboot the system
+      reboot:
+      when: (reboot_required.rc == 1) or (reboot_required_ubuntu.stdout != 'running')
 
-    - name: Notify if no services require restart
-      debug:
-        msg: "No services require restart."
-      when: needs_restarting_check.stdout == "" or (needs_restarting_output is not defined)
