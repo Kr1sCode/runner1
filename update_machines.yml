@@ -1,46 +1,44 @@
 ---
-- name: Update system and reboot if necessary
+# Playbook to update Linux servers running various distributions
+- name: Update Linux servers
   hosts: all
-  become: yes
+  become: true # Run tasks with root privileges
+
   tasks:
-    - name: Determine OS distribution
-      set_fact:
-        os_family: "{{ ansible_os_family }}"
+    # Task to update Debian-based Linux distributions
+    - name: Update Debian-based Linux distributions
+      when: ansible_distribution in ['Debian', 'Ubuntu', 'LinuxMint']
+      ansible.builtin.apt:
+        upgrade: true
+        update_cache: true
+        cache_valid_time: 3600
 
-    - name: Update Debian/Ubuntu systems
-      apt:
-        update_cache: yes
-        upgrade: dist
-      when: os_family == "Debian"
+    # Task to update Arch Linux
+    - name: Update Arch-based Linux distributions
+      when: ansible_distribution == 'Arch Linux'
+      community.general.pacman:
+        update_cache: true
+        upgrade: true
 
-    - name: Update RedHat/Fedora systems
-      yum:
+    # Task to update CentOS-based Linux distributions
+    - name: Update CentOS-based Linux distributions
+      when: ansible_distribution in ['CentOS', 'RedHat', 'OracleLinux', 'Amazon']
+      ansible.builtin.yum:
         name: '*'
         state: latest
-      when: os_family == "RedHat"
+        update_only: true # Updates but does not install additional packages.
 
-    - name: Check if a reboot is required for Debian/Ubuntu
-      command: /usr/bin/dpkg --get-selections | grep -c '^linux-image'
-      register: kernel_count
-      changed_when: false
-      when: os_family == "Debian"
-      become: yes
+    # Task to update Fedora-based Linux distributions
+    - name: Update Fedora-based Linux distributions
+      when: ansible_distribution == 'Fedora'
+      ansible.builtin.dnf:
+        name: '*'
+        state: latest
+        update_only: true # Updates but does not install additional packages.
 
-    - name: Check if a reboot is required for RedHat/Fedora
-      command: needs-restarting
-      register: reboot_check
-      changed_when: false
-      when: os_family == "RedHat"
-      ignore_errors: true  # Ignore errors if command is not found
-
-    - name: Determine if a reboot is required for RedHat/Fedora
-      set_fact:
-        reboot_required: "{{ reboot_check.rc == 1 if reboot_check is defined else false }}"
-
-    - name: Reboot the system if required for Debian/Ubuntu
-      reboot:
-      when: kernel_count.stdout|int > 0
-
-    - name: Reboot the system if required for RedHat/Fedora
-      reboot:
-      when: reboot_required | default(false)  # Default to false if not set
+    # Task to update openSUSE-based Linux distributions
+    - name: Update openSUSE-based Linux distributions
+      when: ansible_distribution in ['openSUSE Leap', 'SUSE Linux Enterprise Server']
+      community.general.zypper:
+        name: '*'
+        state: latest
