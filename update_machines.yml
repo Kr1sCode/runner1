@@ -1,26 +1,48 @@
 ---
-- hosts: all
-  become: true
+- name: Update system on remote hosts and restart services if needed
+  hosts: all
+  become: yes
+
   tasks:
-    - name: Update and upgrade all packages on Debian/Ubuntu
+    - name: Gather system facts
+      setup:
+
+    - name: Update the system (Debian/Ubuntu)
       apt:
         update_cache: yes
         upgrade: dist
       when: ansible_os_family == "Debian"
 
-    - name: Update and upgrade all packages on RHEL/CentOS
+    - name: Update the system (RHEL/CentOS)
       yum:
         name: "*"
         state: latest
       when: ansible_os_family == "RedHat"
 
-    - name: Check and reboot if needed (Debian-based)
-      command: /usr/bin/needs-restarting
-      register: reboot_required
-      failed_when: reboot_required.rc not in [0, 1]
-      changed_when: reboot_required.rc == 1
-      when: ansible_os_family == "Debian"
+    - name: Check if needs-restarting is available
+      command: which needs-restarting
+      register: needs_restarting_check
+      ignore_errors: true
 
-    - name: Reboot the system if needed (Debian-based)
-      reboot:
-      when: reboot_required.rc == 1
+    - name: Check if services need restarting
+      command: needs-restarting
+      when: needs_restarting_check.stdout != ""
+      register: needs_restarting_output
+      ignore_errors: true
+
+    - name: Restart services if required (for RHEL/CentOS)
+      service:
+        name: "{{ item }}"
+        state: restarted
+      loop: "{{ ansible_services }}"
+      when: needs_restarting_output is defined and needs_restarting_output.rc == 0
+
+    - name: Notify if services need restarting
+      debug:
+        msg: "The following services need restarting: {{ needs_restarting_output.stdout }}"
+      when: needs_restarting_output is defined and needs_restarting_output.rc == 0
+
+    - name: Notify if no services require restart
+      debug:
+        msg: "No services require restart."
+      when: needs_restarting_check.stdout == "" or (needs_restarting_output is not defined)
